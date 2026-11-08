@@ -38,8 +38,9 @@ def main():
     for b in bookings:
         if b["uid"] not in seen:
             co = b["end"].strftime("%d/%m/%Y")
-            send_email(f"Nouvelle réservation ! Check-out le {co}, "
-                       f"ménage à prévoir ce jour-là.")
+            send_email(f"Bonjour, on a un nouveau check-out le {co}. "
+                       f"Est-ce que vous pouvez prévoir un nettoyage "
+                       f"pour ce jour-là ? Merci !")
             seen.append(b["uid"])
 
     cal = Calendar()
