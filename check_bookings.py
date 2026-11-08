@@ -1,6 +1,5 @@
-# check_bookings.py
 import json, os, smtplib, urllib.request
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from email.mime.text import MIMEText
 from icalendar import Calendar, Event
 
@@ -49,6 +48,7 @@ def main():
     for b in bookings:
         ev = Event()
         ev.add("uid", b["uid"] + "-block")
+        ev.add("dtstamp", datetime.now(timezone.utc))
         ev.add("summary", "Bloque apres check-out")
         ev.add("dtstart", b["end"])
         ev.add("dtend", b["end"] + timedelta(days=2))
