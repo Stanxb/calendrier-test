@@ -21,23 +21,28 @@ def fetch_bookings():
         })
     return out
 
-def send_email(text):
+def send_email(subject, text):
     msg = MIMEText(text)
-    msg["Subject"] = "Nouvelle réservation Booking"
+    msg["Subject"] = subject
     msg["From"] = GMAIL
     msg["To"] = GMAIL
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as s:
         s.login(GMAIL, GMAIL_PASS)
         s.send_message(msg)
 
+def overlaps(a_start, a_end, b_start, b_end):
+    return a_start < b_end and b_start < a_end
+
 def main():
     seen = json.load(open(SEEN_FILE)) if os.path.exists(SEEN_FILE) else []
     bookings = fetch_bookings()
 
+    # Messages pour les nouvelles réservations
     for b in bookings:
         if b["uid"] not in seen:
             co = b["end"].strftime("%d/%m/%Y")
-            send_email(f"Bonjour, on a un nouveau check-out le {co}. "
+            send_email("Nouvelle réservation Booking",
+                       f"Bonjour, on a un nouveau check-out le {co}. "
                        f"Est-ce que vous pouvez prévoir un nettoyage "
                        f"pour ce jour-là ? Merci !")
             seen.append(b["uid"])
@@ -45,14 +50,34 @@ def main():
     cal = Calendar()
     cal.add("prodid", "-//Blocage menage//FR")
     cal.add("version", "2.0")
+
     for b in bookings:
-        ev = Event()
-        ev.add("uid", b["uid"] + "-block")
-        ev.add("dtstamp", datetime.now(timezone.utc))
-        ev.add("summary", "Bloque apres check-out")
-        ev.add("dtstart", b["end"])
-        ev.add("dtend", b["end"] + timedelta(days=2))
-        cal.add_component(ev)
+        blocks = [
+            ("avant", b["start"] - timedelta(days=1), b["start"]),
+            ("apres", b["end"], b["end"] + timedelta(days=2)),
+        ]
+        for label, s, e in blocks:
+            conflict = any(
+                o["uid"] != b["uid"] and overlaps(s, e, o["start"], o["end"])
+                for o in bookings
+            )
+            if conflict:
+                key = f"alert-{b['uid']}-{label}"
+                if key not in seen:
+                    send_email("Blocage impossible",
+                               f"Le blocage {label} la réservation "
+                               f"du {b['start'].strftime('%d/%m/%Y')} au "
+                               f"{b['end'].strftime('%d/%m/%Y')} n'a pas pu "
+                               f"se faire : ces jours sont déjà réservés.")
+                    seen.append(key)
+                continue
+            ev = Event()
+            ev.add("uid", f"{b['uid']}-block-{label}")
+            ev.add("dtstamp", datetime.now(timezone.utc))
+            ev.add("summary", f"Bloque {label}")
+            ev.add("dtstart", s)
+            ev.add("dtend", e)
+            cal.add_component(ev)
 
     os.makedirs("docs", exist_ok=True)
     open(BLOCK_FILE, "wb").write(cal.to_ical())
