@@ -1,5 +1,5 @@
 import json, os, smtplib, urllib.request
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from email.mime.text import MIMEText
 from icalendar import Calendar, Event
 
@@ -7,6 +7,7 @@ BOOKING_ICAL = os.environ["BOOKING_ICAL_URL"]
 GMAIL = os.environ["GMAIL_ADDRESS"]
 GMAIL_PASS = os.environ["GMAIL_APP_PASSWORD"]
 SEEN_FILE = "seen.json"
+ACTIVE_FILE = "active.json"
 BLOCK_FILE = "docs/blocked.ics"
 
 def fetch_bookings():
@@ -35,9 +36,21 @@ def overlaps(a_start, a_end, b_start, b_end):
 
 def main():
     seen = json.load(open(SEEN_FILE)) if os.path.exists(SEEN_FILE) else []
+    old_active = json.load(open(ACTIVE_FILE)) if os.path.exists(ACTIVE_FILE) else {}
     bookings = fetch_bookings()
+    current_uids = {b["uid"] for b in bookings}
+    today = date.today().isoformat()
 
-    # Messages pour les nouvelles réservations
+    # Réservations annulées
+    for uid, info in old_active.items():
+        if uid not in current_uids and info["end"] > today:
+            co = date.fromisoformat(info["end"]).strftime("%d/%m/%Y")
+            send_email("Réservation annulée",
+                       f"Bonjour, la réservation avec check-out le {co} "
+                       f"a été annulée. Pas besoin de prévoir le nettoyage "
+                       f"ce jour-là. Merci !")
+
+    # Nouvelles réservations
     for b in bookings:
         if b["uid"] not in seen:
             co = b["end"].strftime("%d/%m/%Y")
@@ -79,9 +92,12 @@ def main():
             ev.add("dtend", e)
             cal.add_component(ev)
 
+    new_active = {b["uid"]: {"end": b["end"].isoformat()[:10]} for b in bookings}
+
     os.makedirs("docs", exist_ok=True)
     open(BLOCK_FILE, "wb").write(cal.to_ical())
     json.dump(seen, open(SEEN_FILE, "w"))
+    json.dump(new_active, open(ACTIVE_FILE, "w"))
 
 if __name__ == "__main__":
     main()
