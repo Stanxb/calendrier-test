@@ -16,8 +16,8 @@ jobs:
       - run: python check_bookings.py
         env:
           BOOKING_ICAL_URL: ${{ secrets.BOOKING_ICAL_URL }}
-          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
-          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          WHATSAPP_PHONE: ${{ secrets.WHATSAPP_PHONE }}
+          CALLMEBOT_APIKEY: ${{ secrets.CALLMEBOT_APIKEY }}
       - run: |
           git config user.name bot
           git config user.email bot@example.com
