@@ -1,14 +1,15 @@
-import json, os, smtplib, urllib.request
+import json, os, urllib.request, urllib.parse
 from datetime import date, datetime, timedelta, timezone
-from email.mime.text import MIMEText
 from icalendar import Calendar, Event
 
 BOOKING_ICAL = os.environ["BOOKING_ICAL_URL"]
-GMAIL = os.environ["GMAIL_ADDRESS"]
-GMAIL_PASS = os.environ["GMAIL_APP_PASSWORD"]
+WA_PHONE = os.environ["WHATSAPP_PHONE"]
+WA_KEY = os.environ["CALLMEBOT_APIKEY"]
+
 SEEN_FILE = "seen.json"
 ACTIVE_FILE = "active.json"
 BLOCK_FILE = "docs/blocked.ics"
+
 
 def fetch_bookings():
     data = urllib.request.urlopen(BOOKING_ICAL).read()
@@ -22,17 +23,25 @@ def fetch_bookings():
         })
     return out
 
+
 def send_email(subject, text):
-    msg = MIMEText(text)
-    msg["Subject"] = subject
-    msg["From"] = GMAIL
-    msg["To"] = GMAIL
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as s:
-        s.login(GMAIL, GMAIL_PASS)
-        s.send_message(msg)
+    # Envoie maintenant par WhatsApp (CallMeBot) au lieu du mail
+    message = f"*{subject}*\n{text}"
+    params = urllib.parse.urlencode({
+        "phone": WA_PHONE,
+        "text": message,
+        "apikey": WA_KEY,
+    })
+    url = f"https://api.callmebot.com/whatsapp.php?{params}"
+    try:
+        urllib.request.urlopen(url, timeout=30).read()
+    except Exception as e:
+        print(f"Erreur WhatsApp : {e}")
+
 
 def overlaps(a_start, a_end, b_start, b_end):
     return a_start < b_end and b_start < a_end
+
 
 def main():
     seen = json.load(open(SEEN_FILE)) if os.path.exists(SEEN_FILE) else []
@@ -63,7 +72,6 @@ def main():
     cal = Calendar()
     cal.add("prodid", "-//Blocage menage//FR")
     cal.add("version", "2.0")
-
     for b in bookings:
         blocks = [
             ("avant", b["start"] - timedelta(days=1), b["start"]),
@@ -93,11 +101,11 @@ def main():
             cal.add_component(ev)
 
     new_active = {b["uid"]: {"end": b["end"].isoformat()[:10]} for b in bookings}
-
     os.makedirs("docs", exist_ok=True)
     open(BLOCK_FILE, "wb").write(cal.to_ical())
     json.dump(seen, open(SEEN_FILE, "w"))
     json.dump(new_active, open(ACTIVE_FILE, "w"))
+
 
 if __name__ == "__main__":
     main()
